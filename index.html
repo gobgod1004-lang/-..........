@@ -1,11 +1,252 @@
-<!DOCTYPE html>
-<html lang="kr">
+<!doctype html>
+<html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>가상 채팅 (Single File)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#94a3b8;--me:#0ea5a4}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", Roboto, "Noto Sans KR", "Segoe UI", "Helvetica Neue", Arial}
+    body{background:linear-gradient(180deg,#071426 0%, #071823 60%);display:flex;align-items:center;justify-content:center;padding:24px;color:#e6eef8}
+
+    .app{width:100%;max-width:980px;height:720px;border-radius:12px;overflow:hidden;display:grid;grid-template-columns:320px 1fr;box-shadow:0 10px 30px rgba(2,6,23,0.7)}
+
+    /* left panel */
+    .sidebar{background:linear-gradient(180deg,var(--card), #071625);padding:16px;display:flex;flex-direction:column;gap:12px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .brand h1{font-size:16px;margin:0}
+    .conversations{flex:1;overflow:auto;padding-top:8px}
+    .conv{padding:10px;border-radius:8px;display:flex;gap:10px;align-items:center;cursor:pointer}
+    .conv:hover{background:rgba(255,255,255,0.02)}
+    .conv.active{background:rgba(124,58,237,0.12)}
+    .avatar{width:40px;height:40px;border-radius:8px;background:#091027;display:inline-grid;place-items:center;color:var(--accent);font-weight:700}
+    .meta{flex:1}
+    .meta .title{font-size:14px}
+    .meta .sub{font-size:12px;color:var(--muted);margin-top:4px}
+    .bottom-actions{display:flex;gap:8px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+
+    /* right panel */
+    .chat-window{display:flex;flex-direction:column;background:linear-gradient(180deg,#071426,#051025)}
+    .header{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;gap:12px}
+    .header .title{font-weight:600}
+    .messages{flex:1;padding:20px;overflow:auto;display:flex;flex-direction:column;gap:12px;background-image:linear-gradient(transparent, rgba(255,255,255,0.02));}
+
+    .bubble{max-width:78%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);line-height:1.3}
+    .from-me{align-self:flex-end;background:linear-gradient(135deg,var(--me),#06b6d4);color:#052022;border:none;border-radius:14px 14px 6px 14px}
+    .from-bot{align-self:flex-start;background:linear-gradient(180deg,#0b1220,#071025);color:#cfe9ff;border:1px solid rgba(255,255,255,0.03);border-radius:14px 14px 14px 6px}
+    .meta-line{font-size:11px;color:var(--muted);margin-top:6px}
+
+    .input-area{padding:14px;border-top:1px solid rgba(255,255,255,0.03);display:flex;gap:10px;align-items:center}
+    .input{flex:1;background:transparent;border:1px solid rgba(255,255,255,0.04);padding:12px 14px;border-radius:10px;color:inherit;outline:none}
+    .send{background:var(--accent);border:none;padding:10px 14px;border-radius:10px;color:white;cursor:pointer}
+    .controls{display:flex;gap:8px}
+
+    .typing{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}
+    .dot:nth-child(2){animation-delay:.15s}
+    .dot:nth-child(3){animation-delay:.3s}
+    @keyframes blink{0%{opacity:.15}50%{opacity:1}100%{opacity:.15}}
+
+    /* responsive */
+    @media (max-width:880px){.app{grid-template-columns:1fr} .sidebar{display:none}}
+
+    /* simple scrollbar */
+    .messages::-webkit-scrollbar, .conversations::-webkit-scrollbar{width:10px}
+    .messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.03);border-radius:8px}
+  </style>
 </head>
 <body>
-    페이지 첫 나의 
+  <div class="app" role="application">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">C</div>
+        <div>
+          <h1>가상 채팅</h1>
+          <div style="font-size:12px;color:var(--muted)">Single-file demo</div>
+        </div>
+      </div>
+
+      <div class="conversations" id="conversations">
+        <!-- generated -->
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn" id="newConv">새 대화</button>
+        <button class="btn" id="clearChat">대화 지우기</button>
+        <button class="btn" id="download">저장</button>
+      </div>
+    </aside>
+
+    <main class="chat-window" aria-live="polite">
+      <div class="header">
+        <div class="avatar" id="roomAvatar">B</div>
+        <div>
+          <div class="title" id="roomTitle">챗봇</div>
+          <div style="font-size:12px;color:var(--muted)" id="roomSub">여기에 가상의 챗이 표시됩니다</div>
+        </div>
+      </div>
+
+      <div class="messages" id="messages" role="log" aria-atomic="false">
+        <!-- messages -->
+      </div>
+
+      <div class="input-area">
+        <input id="input" class="input" placeholder="메시지를 입력하고 Enter를 누르세요" autocomplete="off" />
+        <div class="controls">
+          <button class="btn" id="emoji">😊</button>
+          <button class="send" id="send">전송</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // 간단한 가상 채팅 - single file
+    const conversationsEl = document.getElementById('conversations')
+    const messagesEl = document.getElementById('messages')
+    const inputEl = document.getElementById('input')
+    const sendBtn = document.getElementById('send')
+    const newConvBtn = document.getElementById('newConv')
+    const clearChatBtn = document.getElementById('clearChat')
+    const downloadBtn = document.getElementById('download')
+    const emojiBtn = document.getElementById('emoji')
+
+    let conversations = []
+    let activeId = null
+
+    function formatTime(d = new Date()){
+      return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+    }
+
+    function makeConv(title = '새 대화'){
+      const id = Date.now().toString(36)
+      const conv = {id,title,messages:[]}
+      conversations.unshift(conv)
+      activeId = id
+      renderConversations()
+      renderMessages()
+    }
+
+    function renderConversations(){
+      conversationsEl.innerHTML = ''
+      conversations.forEach(conv =>{
+        const el = document.createElement('div')
+        el.className = 'conv' + (conv.id===activeId? ' active':'')
+        el.innerHTML = `<div class="avatar">${conv.title[0] || 'C'}</div><div class="meta"><div class="title">${conv.title}</div><div class="sub">${conv.messages.length} 메시지</div></div>`
+        el.onclick = ()=>{ activeId = conv.id; renderConversations(); renderMessages(); }
+        conversationsEl.appendChild(el)
+      })
+    }
+
+    function renderMessages(){
+      const conv = conversations.find(c=>c.id===activeId)
+      if(!conv){ messagesEl.innerHTML = '<div style="color:var(--muted);">새 대화를 시작하세요 — 오른쪽 아래에 메시지를 입력하세요.</div>'; document.getElementById('roomTitle').textContent='챗봇'; return }
+      document.getElementById('roomTitle').textContent = conv.title
+      messagesEl.innerHTML = ''
+      conv.messages.forEach(m=>{
+        const b = document.createElement('div')
+        b.className = 'bubble ' + (m.from==='me'? 'from-me':'from-bot')
+        b.innerHTML = `<div>${escapeHtml(m.text)}</div><div class="meta-line">${m.from==='me'? '나' : '봇'} · ${m.time}</div>`
+        messagesEl.appendChild(b)
+      })
+      messagesEl.scrollTop = messagesEl.scrollHeight
+    }
+
+    function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+    function addMessage(text,from='me'){
+      const conv = conversations.find(c=>c.id===activeId)
+      if(!conv) makeConv('새 대화')
+      const time = formatTime()
+      conversations.find(c=>c.id===activeId).messages.push({text,from,time})
+      renderConversations(); renderMessages();
+    }
+
+    function botReply(userText){
+      // 단순 룰 기반 답변 - 여기서 원하는 로직으로 확장하세요.
+      const lower = userText.trim().toLowerCase()
+      if(!lower) return '무슨 말씀인지 잘 모르겠어요.'
+      if(lower.includes('안녕')||lower.includes('안녕하세요')) return '안녕하세요! 무엇을 도와드릴까요?'
+      if(lower.includes('시간')) return `지금 시각은 ${formatTime() } 입니다.`
+      if(lower.includes('날씨')) return '날씨 정보는 이 데모에서 지원되지 않아요 — 실제 API를 연결해 보세요.'
+      if(lower.includes('도움')) return '예: "안녕", "시간 알려줘", "간단한 계산 2+2" 등으로 시도해 보세요.'
+      // 계산 시도
+      const calcMatch = userText.match(/([-+*/\d\.\s]+)\s*=?$|계산\s*:\s*([-+*/\d\.\s]+)/)
+      if(calcMatch){
+        try{
+          const expr = (calcMatch[1]||calcMatch[2]||'').replace(/[^0-9+\-*/(). ]/g,'')
+          if(expr) {
+            // 안전하게 계산
+            const result = Function('return ('+expr+')')()
+            if(typeof result === 'number' && isFinite(result)) return `${expr.trim()} = ${result}`
+          }
+        }catch(e){/* ignore */}
+      }
+      // 기본 에코
+      return `"${userText}" 라고 하셨군요. 조금만 기다려주세요 — 데모 버전이에요.`
+    }
+
+    async function sendMessage(){
+      const text = inputEl.value.trim()
+      if(!text) return
+      addMessage(text,'me')
+      inputEl.value = ''
+
+      // typing indicator
+      const typingEl = document.createElement('div')
+      typingEl.className='bubble from-bot'
+      typingEl.innerHTML = `<div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span> 응답 생성중...</div>`
+      messagesEl.appendChild(typingEl)
+      messagesEl.scrollTop = messagesEl.scrollHeight
+
+      // 에뮬레이션: 난수 지연
+      const delay = 700 + Math.random()*900
+      await new Promise(r=>setTimeout(r,delay))
+
+      // replace typing with real reply
+      const reply = botReply(text)
+      const conv = conversations.find(c=>c.id===activeId)
+      if(conv){
+        // remove last typing bubble
+        if(messagesEl.contains(typingEl)) messagesEl.removeChild(typingEl)
+        conv.messages.push({text:reply,from:'bot',time:formatTime()})
+        renderConversations(); renderMessages();
+      }
+    }
+
+    // initialize
+    makeConv('새 대화')
+
+    // events
+    sendBtn.addEventListener('click', sendMessage)
+    inputEl.addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage() })
+    newConvBtn.addEventListener('click', ()=>{ makeConv('대화 '+(conversations.length+1)) })
+    clearChatBtn.addEventListener('click', ()=>{
+      const c = conversations.find(c=>c.id===activeId)
+      if(c) c.messages=[]
+      renderConversations(); renderMessages();
+    })
+
+    emojiBtn.addEventListener('click', ()=>{ inputEl.value += '😊'; inputEl.focus() })
+
+    downloadBtn.addEventListener('click', ()=>{
+      const conv = conversations.find(c=>c.id===activeId)
+      if(!conv) return
+      const blob = new Blob([JSON.stringify(conv, null, 2)], {type:'application/json'})
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = (conv.title || 'conversation') + '.json'
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    })
+
+    // small helpers for accessibility
+    window.addEventListener('resize', ()=> messagesEl.scrollTop = messagesEl.scrollHeight)
+
+    // expose for debugging
+    window._chat = {conversations, addMessage, botReply}
+  </script>
 </body>
 </html>
